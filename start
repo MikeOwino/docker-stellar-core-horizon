@@ -351,7 +351,7 @@ function upgrade_standalone() {
 function exec_supervisor() {
 	echo "starting supervisor"
 	upgrade_standalone &
-	exec supervisord -n -c $SUPHOME/etc/supervisord.conf
+	exec supervisord -n -c $SUPHOME/etc/supervisord-postgres-core-horizon.conf
 }
 
 # run_silent is a utility function that runs a command with an abbreviated
@@ -386,8 +386,9 @@ function start_postgres() {
 		return 0
 	fi
 
-	sudo -u postgres $PGBIN/postgres -D $PGDATA -c config_file=$PGHOME/etc/postgresql.conf &> /dev/null &
-	CURRENT_POSTGRES_PID=$!
+	supervisord -c $SUPHOME/etc/supervisord-postgres.conf
+	CURRENT_POSTGRES_PID=$(supervisorctl pid)
+	echo supervisor pid: $(supervisorctl pid)
 
 	while ! sudo -u postgres psql -c 'select 1' &> /dev/null ; do
 	  echo "Waiting for postgres to be available..."
@@ -398,15 +399,19 @@ function start_postgres() {
 }
 
 function stop_postgres() {
-	if [ -z "$CURRENT_POSTGRES_PID" ]; then
+	if [ "$CURRENT_POSTGRES_PID" != "true" ]; then
 		return 0
 	fi
 
-	killall postgres
+	supervisorctl stop all
+	kill -s SIGTERM "$CURRENT_POSTGRES_PID"
+
 	# wait for postgres to die
 	while kill -0 "$CURRENT_POSTGRES_PID" &> /dev/null; do
 		sleep 0.5
 	done
+
+
 	echo "postgres: down"
 }
 
